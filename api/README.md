@@ -30,12 +30,17 @@ These operations simulate how a real e-commerce ordering system would operate.
 
 **Endpoint**
 
+```
+POST /orders
+```
 
 **Description**
 
 Creates a new customer order in the system.
 
 **Example Request Body**
+
+```json
 {
 "customerName": "John Doe",
 "product": "Fresh Produce Package",
@@ -44,6 +49,7 @@ Creates a new customer order in the system.
 "deliveryWindow": "10AM - 12PM",
 "specialInstructions": "Leave at front door"
 }
+```
 
 
 **System Actions**
@@ -57,7 +63,10 @@ Creates a new customer order in the system.
 ### Get Order Status
 
 **Endpoint**
+
+```
 GET /orders/{orderId}
+```
 
 
 **Description**
@@ -66,12 +75,13 @@ Returns the current status of a specific order.
 
 **Example Response**
 
-
+```json
 {
 "orderId": 1045,
 "status": "Processing",
 "deliveryWindow": "10AM - 12PM"
 }
+```
 
 
 Possible status values:
@@ -88,8 +98,9 @@ Possible status values:
 
 **Endpoint**
 
-
+```
 PUT /orders/{orderId}/delivery
+```
 
 
 **Description**
@@ -98,11 +109,12 @@ Allows a customer to update delivery preferences such as delivery time or specia
 
 **Example Request Body**
 
-
+```json
 {
 "deliveryWindow": "12PM - 2PM",
 "specialInstructions": "Call on arrival"
 }
+```
 
 
 ---
@@ -113,7 +125,7 @@ After a new order is created, the API publishes an event to a messaging queue.
 
 Example event flow:
 
-
+```
 Order Created
 ↓
 API publishes event
@@ -121,7 +133,7 @@ API publishes event
 Message sent to Amazon SQS
 ↓
 Inventory update simulation triggered
-
+```
 
 This demonstrates how modern systems use asynchronous communication between services.
 
@@ -153,4 +165,4 @@ Tests included:
 - Updating delivery preferences
 - Verifying event messages published to the queue
 
-These tests confirmed that the backend services were functioning correctly
+These tests confirmed that the backend services were functioning correctly.
