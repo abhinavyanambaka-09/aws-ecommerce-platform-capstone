@@ -1,110 +1,55 @@
-# Project Documentation
+# AWS E-commerce Ordering Platform — Architecture Case Study
 
-## Project Overview
+> **What this repo is:** the architecture, infrastructure walkthrough, and evidence for a cloud-native ordering platform I designed and deployed on AWS as the capstone for my B.S. in Cloud Computing (Purdue Global, 2026). It is a documentation-and-evidence repo: the AWS environment was built and configured by hand in the console and verified end to end. The application container source is not included here.
 
-This capstone project demonstrates the design and deployment of a cloud-native e-commerce ordering platform built using Amazon Web Services (AWS). The system simulates a food distribution ordering platform where customers can place orders, customize delivery preferences, and track order status.
+## What was built
 
-The goal of the project was to implement a realistic cloud architecture using multiple AWS services including compute, networking, database, and messaging components.
+A food-distribution ordering system: customers place orders, choose delivery preferences, and track status. The backend API runs as a container on **Amazon ECS** behind an **Application Load Balancer**, stores orders in **Amazon RDS (MySQL)** inside a private subnet, and publishes order events to **Amazon SQS** so downstream systems (inventory, delivery) consume them asynchronously instead of being called directly.
 
----
+```
+Customer → ALB (HTTP→HTTPS redirect) → ECS service (API container)
+                                             │
+                                             ├─→ RDS MySQL (private subnet, SG-restricted)
+                                             │     secrets via AWS Secrets Manager
+                                             └─→ SQS queue ──→ inventory / delivery consumers
+Observability: CloudWatch log groups + alarm · CloudTrail (multi-region, S3)
+```
 
-## System Components
+## Design decisions
 
-The system consists of several major components:
+- **Private data tier.** RDS sits in private subnets behind a dedicated database security group; a NAT gateway gives private resources outbound access without inbound exposure.
+- **Event-driven integration.** The API never calls inventory or delivery systems directly. It publishes an order event to SQS, which decouples the systems, absorbs bursts, and lets consumers fail and retry without affecting order placement.
+- **No secrets in config.** Database credentials are stored in AWS Secrets Manager rather than in the container image or environment.
+- **Managed everything.** ECS (not self-managed EC2 hosts), RDS with automated backups, ALB health checks, so the operational surface is small for a single builder.
+- **Logging first.** CloudTrail delivering to S3 was enabled before the first service deployment; CloudWatch log groups and an alarm cover the running service.
 
-- Web interface for placing orders
-- Backend API for processing orders
-- Managed relational database for storing data
-- Event-driven messaging for system integrations
-- Cloud networking infrastructure
+## Evidence
 
-These components work together to simulate a modern cloud-native application.
+Six screenshots that show the system working, in deployment order. The full set (47) is in [`screenshots /`](screenshots%20/).
 
----
+| Step | Evidence |
+|---|---|
+| 1. VPC with public/private subnets, IGW, NAT, route tables | ![VPC](screenshots%20/U3-Step4-VPC.png) |
+| 2. ECS cluster created | ![ECS cluster](screenshots%20/U4-01-ECS-Cluster-Created.png) |
+| 3. ALB active with listener and target group | ![ALB](screenshots%20/Unit4_ALB_Active_Listener_TargetGroup.png) |
+| 4. Orders schema and sample queries (customers, orders, order_items) | ![Schema](screenshots%20/U5_databaseTables.png) |
+| 5. Order events received on the SQS queue | ![SQS](screenshots%20/U6_SQSMsgsReceivedSeccuess.png) |
+| 6. HTTP→HTTPS redirect rule on the listener | ![Redirect](screenshots%20/U7%20http%20to%20https%20redirect.png) |
 
-## AWS Services Used
+## Documentation
 
-The following AWS services were used in this project:
+- [`architecture/`](architecture/README.md) — layers, components, and how they communicate
+- [`infrastructure/`](infrastructure/README.md) — VPC, security groups, ECS, RDS, SQS configuration and the deployment order
+- [`api/`](api/README.md) — REST endpoints (create order, get order, update delivery preference, order status)
+- [`integrations/`](integrations/README.md) — the SQS event flow and the simulated inventory consumer
 
-### Amazon ECS
+## What I would do differently
 
-Amazon ECS was used to deploy the backend API as a containerized service. ECS allows applications to run in containers while handling scaling and service management.
+- **Infrastructure as code.** Everything here was clicked together in the console. The next iteration is a CloudFormation or Terraform definition so the environment is reproducible and reviewable.
+- **A build pipeline.** Image builds, the push to ECR, and ECS service rollouts were manual; a CI/CD pipeline would make deployments repeatable.
+- **A dead-letter queue.** Failed inventory events currently have nowhere to go.
+- **Automated tests against the API** rather than manual Postman checks.
 
-### Amazon RDS MySQL
+## What went wrong and how it was fixed
 
-Amazon RDS provides a managed relational database for storing application data such as orders, delivery preferences, and order status.
-
-### Amazon VPC
-
-A Virtual Private Cloud was configured to isolate application resources and control network traffic between system components.
-
-### Amazon EC2
-
-EC2 instances were used during development to test connectivity and verify infrastructure configuration.
-
-### Amazon SQS
-
-Amazon SQS was used to simulate event-driven communication between the ordering platform and external systems such as inventory services.
-
----
-
-## Application Workflow
-
-The following steps describe how the system processes an order.
-
-1. A customer submits an order through the web interface.
-
-2. The request is sent to the backend API running on Amazon ECS.
-
-3. The API processes the request and stores the order in the RDS database.
-
-4. An order event is published to the messaging queue.
-
-5. The integration layer simulates inventory updates and downstream processing.
-
-This workflow demonstrates how distributed systems communicate in a cloud environment.
-
----
-
-## Deployment Steps
-
-The following high-level steps were used to deploy the system.
-
-1. Configure AWS networking infrastructure including VPC, subnets, and security groups.
-
-2. Create and configure the RDS MySQL database.
-
-3. Deploy the backend API container using Amazon ECS.
-
-4. Configure messaging services for event-driven integrations.
-
-5. Test system connectivity and functionality using EC2 and API testing tools.
-
----
-
-## Challenges Encountered
-
-Several technical challenges were encountered during the implementation process.
-
-These included:
-
-- VPC networking configuration issues
-- Internet Gateway attachment confusion
-- ECS service connectivity troubleshooting
-- Security group rules blocking API traffic
-
-These issues were resolved by adjusting network configurations and verifying service connectivity.
-
----
-
-## Project Outcome
-
-The final system successfully demonstrated:
-
-- Containerized application deployment
-- Managed cloud database usage
-- Secure cloud networking configuration
-- Event-driven system integration
-- Real-world cloud architecture patterns
-
-The project serves as a practical demonstration of how modern applications can be built and deployed using AWS cloud infrastructure.
+The main problems were VPC routing (Internet Gateway attachment and route-table configuration), ECS service connectivity to the database, and security-group rules blocking API traffic. Each was resolved by correcting the network and security-group configuration and re-verifying connectivity from an EC2 instance inside the VPC before retesting the API.
